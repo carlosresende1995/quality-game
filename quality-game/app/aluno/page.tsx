@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '../../lib/supabase'
 
 type StudentSession={jogador_id:string;player_token:string;sala_id:string;linha_numero:number;nome_sala:string;total_rodadas:number;duracao_rodada:number;meta_cpk:number;status:string;nome?:string}
 
