@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '../../lib/supabase'
 
 type AdminSession = { sala_id:string; codigo:string; admin_token:string }
 type Room = { sala_id:string; codigo:string; nome:string; status:string; rodada_atual:number; total_rodadas:number; duracao_rodada:number; meta_cpk:number; limite_alunos:number; cenario:string }
