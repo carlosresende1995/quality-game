@@ -1,48 +1,143 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
-type StudentSession={jogador_id:string;player_token:string;sala_id:string;linha_numero:number;nome_sala:string;total_rodadas:number;duracao_rodada:number;meta_cpk:number;status:string;nome?:string}
+function AlunoContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
-export default function AlunoPage(){
-  const router=useRouter(); const qs=useSearchParams()
-  const [codigo,setCodigo]=useState(''); const [nome,setNome]=useState(''); const [student,setStudent]=useState<StudentSession|null>(null); const [msg,setMsg]=useState(''); const [status,setStatus]=useState('aguardando')
+  const [codigo, setCodigo] = useState('')
+  const [nome, setNome] = useState('')
+  const [mensagem, setMensagem] = useState('')
+  const [carregando, setCarregando] = useState(false)
 
-  useEffect(()=>{const c=(qs.get('codigo')||'').replace(/\D/g,'').slice(0,6); if(c)setCodigo(c); try{const raw=localStorage.getItem('cep_student'); if(raw)setStudent(JSON.parse(raw))}catch{}},[qs])
+  useEffect(() => {
+    const codigoUrl = searchParams.get('codigo')
+    if (codigoUrl) {
+      setCodigo(codigoUrl)
+    }
+  }, [searchParams])
 
-  async function join(){
-    setMsg('Entrando…')
-    if(codigo.length!==6){setMsg('Digite um código de 6 números.');return}
-    if(nome.trim().length<2){setMsg('Digite seu nome.');return}
-    const {data,error}=await supabase.rpc('entrar_sala',{p_codigo:codigo,p_nome:nome.trim()})
-    if(error){setMsg(error.message);return}
-    const s={...(data?.[0]||{}),nome:nome.trim()} as StudentSession
-    localStorage.setItem('cep_student',JSON.stringify(s)); setStudent(s); setMsg('')
+  async function entrarSala() {
+    if (codigo.length !== 6) {
+      setMensagem('Digite um código de sala válido com 6 números.')
+      return
+    }
+
+    if (nome.trim().length < 2) {
+      setMensagem('Digite seu nome.')
+      return
+    }
+
+    setCarregando(true)
+    setMensagem('Entrando na sala...')
+
+    const { data, error } = await supabase.rpc('entrar_sala', {
+      p_codigo: codigo,
+      p_nome: nome.trim(),
+    })
+
+    if (error) {
+      setMensagem(error.message)
+      setCarregando(false)
+      return
+    }
+
+    const jogador = data?.[0]
+
+    if (!jogador) {
+      setMensagem('Não foi possível entrar na sala.')
+      setCarregando(false)
+      return
+    }
+
+    localStorage.setItem(
+      'quality-game-player',
+      JSON.stringify(jogador)
+    )
+
+    router.push('/jogo')
   }
 
-  useEffect(()=>{if(!student)return; const poll=async()=>{const {data,error}=await supabase.rpc('status_sala',{p_sala_id:student.sala_id}); if(error){setMsg(error.message);return} const s=data?.[0]; if(!s)return; setStatus(s.status); if(s.status==='em_andamento') router.push('/jogo')}; poll(); const id=setInterval(poll,1500); return()=>clearInterval(id)},[student,router])
+  return (
+    <main className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-6">
+      <div className="w-full max-w-md rounded-3xl border border-neutral-800 bg-neutral-900 p-6 shadow-2xl">
+        <p className="text-xs uppercase tracking-[0.2em] text-neutral-400">
+          Desafio CEP
+        </p>
 
-  function reset(){localStorage.removeItem('cep_student'); setStudent(null); setMsg('')}
+        <h1 className="mt-2 text-2xl font-semibold">
+          Entrar na partida
+        </h1>
 
-  return <main className="page"><div className="container stack">
-    <nav className="nav"><Link href="/">Início</Link><Link href="/professor">Professor</Link></nav>
-    <section className="panel"><div className="kicker">Modo aluno</div><h1>Entrar na partida</h1><p className="muted">Digite o código mostrado pelo professor.</p></section>
+        <p className="mt-2 text-sm text-neutral-400">
+          Digite o código fornecido pelo professor.
+        </p>
 
-    {!student?<section className="panel stack" style={{maxWidth:620,margin:'0 auto',width:'100%'}}>
-      <label><span>Código da sala</span><input inputMode="numeric" maxLength={6} value={codigo} onChange={e=>setCodigo(e.target.value.replace(/\D/g,'').slice(0,6))} style={{textAlign:'center',fontSize:'2rem',letterSpacing:'.18em',fontWeight:800}} placeholder="483921"/></label>
-      <label><span>Seu nome</span><input value={nome} onChange={e=>setNome(e.target.value)} placeholder="Ex.: Ana" maxLength={40}/></label>
-      <button className="btn primary" onClick={join}>Entrar na sala</button>
-      {msg&&<div className="notice warn">{msg}</div>}
-    </section>:
-    <section className="panel center stack" style={{maxWidth:720,margin:'0 auto',width:'100%'}}>
-      <div className="kicker">Você entrou</div><h1>{student.nome}</h1><p className="muted">{student.nome_sala}</p>
-      <div className="grid3"><div className="metric"><div className="muted">Linha</div><div className="v">{String(student.linha_numero).padStart(2,'0')}</div></div><div className="metric"><div className="muted">Rodadas</div><div className="v">{student.total_rodadas}</div></div><div className="metric"><div className="muted">Meta Cpk</div><div className="v">{Number(student.meta_cpk).toFixed(2)}</div></div></div>
-      <div className={status==='em_andamento'?'notice good':'notice'}>{status==='em_andamento'?'Partida iniciada. Abrindo sua linha…':'Aguardando o professor iniciar a partida.'}</div>
-      <button className="btn" onClick={reset}>Sair da sala</button>
-      {msg&&<div className="notice warn">{msg}</div>}
-    </section>}
-  </div></main>
+        <div className="mt-6 space-y-4">
+          <div>
+            <label className="mb-2 block text-sm">
+              Código da sala
+            </label>
+
+            <input
+              value={codigo}
+              onChange={(e) =>
+                setCodigo(
+                  e.target.value.replace(/\D/g, '').slice(0, 6)
+                )
+              }
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="123456"
+              className="w-full rounded-xl border border-neutral-700 bg-neutral-950 px-4 py-4 text-center text-2xl tracking-[0.3em] outline-none focus:border-white"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm">
+              Seu nome
+            </label>
+
+            <input
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Ex.: Carlos"
+              className="w-full rounded-xl border border-neutral-700 bg-neutral-950 px-4 py-3 outline-none focus:border-white"
+            />
+          </div>
+
+          <button
+            onClick={entrarSala}
+            disabled={carregando}
+            className="w-full rounded-xl bg-white px-4 py-3 font-semibold text-black disabled:opacity-50"
+          >
+            {carregando ? 'Entrando...' : 'Entrar na sala'}
+          </button>
+
+          {mensagem && (
+            <p className="text-sm text-neutral-400">
+              {mensagem}
+            </p>
+          )}
+        </div>
+      </div>
+    </main>
+  )
+}
+
+export default function AlunoPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-neutral-950 text-white flex items-center justify-center">
+          <p className="text-neutral-400">Carregando...</p>
+        </main>
+      }
+    >
+      <AlunoContent />
+    </Suspense>
+  )
 }
