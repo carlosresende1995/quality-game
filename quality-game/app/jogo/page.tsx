@@ -16,7 +16,7 @@ export default function JogoPage(){
   const [student,setStudent]=useState<StudentSession|null>(null); const [status,setStatus]=useState('em_andamento'); const [round,setRound]=useState(1)
   const [temp,setTemp]=useState(3); const [pressure,setPressure]=useState(50); const [co2,setCo2]=useState(50); const [speed,setSpeed]=useState(65)
   const [filter,setFilter]=useState(2); const [valve,setValve]=useState(3); const [sensorBias,setSensorBias]=useState(0); const [cost,setCost]=useState(0); const [vals,setVals]=useState<number[]>([]); const [elapsed,setElapsed]=useState(0); const [msg,setMsg]=useState('')
-  const [actions,setActions]=useState(0)
+  const [actions,setActions]=useState(0); const [syncState,setSyncState]=useState<'ok'|'syncing'|'error'>('syncing')
 
   useEffect(()=>{try{const raw=localStorage.getItem('cep_student'); if(!raw){router.replace('/aluno');return} const s=JSON.parse(raw); sessionRef.current=s; setStudent(s)}catch{router.replace('/aluno')}},[router])
 
@@ -35,7 +35,7 @@ export default function JogoPage(){
     setVals(a=>{const sigma=.42+.0014*(speed-55)**2+Math.max(0,Math.abs(temp-3)-.5)*1.1+Math.max(0,Math.abs(pressure-50)-2)*.17+Math.max(0,Math.abs(co2-50)-2)*.13+valve*.023+filter*.03; const mu=350+(pressure-50)*.20-(temp-3)*.5+(co2-50)*.07-(speed-60)*.018-valve*.025-filter*.055+sensorBias; const add=Math.max(1,Math.round(speed/20)); const next=[...a]; for(let i=0;i<add;i++)next.push(mu+gauss()*sigma+gauss()*Math.abs(sensorBias)*.08); return next.slice(-900)})
   },1000); return()=>clearInterval(id)},[student,status,temp,pressure,co2,speed,filter,valve,sensorBias])
 
-  useEffect(()=>{if(!student)return; const id=setInterval(async()=>{await supabase.rpc('atualizar_resultado_jogador',{p_jogador_id:student.jogador_id,p_player_token:student.player_token,p_score:score,p_cpk:stats.cpk,p_refugo:stats.scrap,p_producao:vals.length,p_custo:cost,p_rodada:round})},2500); return()=>clearInterval(id)},[student,score,stats.cpk,stats.scrap,vals.length,cost,round])
+  useEffect(()=>{if(!student)return; const send=async()=>{setSyncState('syncing'); const {error}=await supabase.rpc('atualizar_resultado_jogador',{p_jogador_id:student.jogador_id,p_player_token:student.player_token,p_score:score,p_cpk:stats.cpk,p_refugo:stats.scrap,p_producao:vals.length,p_custo:cost,p_rodada:round}); setSyncState(error?'error':'ok')}; send(); const id=setInterval(send,2000); return()=>clearInterval(id)},[student,score,stats.cpk,stats.scrap,vals.length,cost,round])
 
   function act(fn:()=>void,c:number){fn();setActions(x=>x+1);setCost(x=>x+c)}
   function cleanValve(){act(()=>setValve(0),180);setMsg('Válvula limpa.')}
@@ -48,7 +48,7 @@ export default function JogoPage(){
 
   return <main className="page"><div className="container stack">
     <nav className="nav"><Link href="/">Início</Link><Link href="/aluno">Sala do aluno</Link></nav>
-    <section className="panel"><div className="row between wrap"><div><div className="kicker">Linha {String(student.linha_numero).padStart(2,'0')} · {student.nome}</div><h1>{student.nome_sala}</h1><div className="muted">Rodada {round}/{student.total_rodadas}</div></div><div className="row wrap"><span className="badge">Score {score}</span><span className="badge">Cpk {stats.cpk==null?'—':stats.cpk.toFixed(2)}</span><span className="badge">Produção {vals.length}</span></div></div></section>
+    <section className="panel"><div className="row between wrap"><div><div className="kicker">Linha {String(student.linha_numero).padStart(2,'0')} · {student.nome}</div><h1>{student.nome_sala}</h1><div className="muted">Rodada {round}/{student.total_rodadas}</div></div><div className="row wrap"><span className="badge">Score {score}</span><span className="badge">Cpk {stats.cpk==null?'—':stats.cpk.toFixed(2)}</span><span className="badge">Produção {vals.length}</span><span className="badge">{syncState==='ok'?'● Sincronizado':syncState==='error'?'● Erro de sync':'● Enviando…'}</span></div></div></section>
 
     {status!=='em_andamento'&&<div className="notice warn">A partida não está em andamento. {msg}</div>}
 
